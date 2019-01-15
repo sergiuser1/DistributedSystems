@@ -10,7 +10,7 @@ class SequentialSpace:
     def put(self, _tuple):
         self.space.append(_tuple)
 
-    def getp(self, _pattern, nonBlocking=True):
+    def getp(self, _pattern):
         if not any(_type in _pattern for _type in self.types):  # checking for FormalFields
             if _pattern not in self.space:
                 return None
@@ -171,9 +171,10 @@ space.put(("kitchen",))
 space.put(("coffee", 2))
 space.put(("another", 2, 3))
 space.put(("last", 1.5))
+space.put((122, 12.5, "q2q3"))
 
 print(space)
-print(space.get((str,)))
+print(space.getp(("coffee", int)))
 print(space)
 print(space.queryAll((str, )))
 print(space)
