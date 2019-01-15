@@ -16,9 +16,7 @@ class Tuples:
         return self.Tuple[self.index]
 
     def GetFieldAt(self,index):
-        tuplist = list(self)
-        field = tuplist[index]
-        return field
+        return list(self)[index]
 
 
 a = Tuples(1,2,3,"hello",(1,2))
