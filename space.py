@@ -1,7 +1,7 @@
 
 class SequentialSpace:
     def __init__(self):
-        self.space = []
+        self.space = [] # TODO: maybe dictionary
         self.types = [str, int, float]
 
     def __str__(self):
@@ -34,7 +34,7 @@ class SequentialSpace:
             return None
 
     # blocking get
-    def get(self, _pattern):
+    def get(self, _pattern): # TODO: multiple locks
         while True:
             if not any(_type in _pattern for _type in self.types):  # checking for FormalFields
                 if _pattern not in self.space:
@@ -164,7 +164,7 @@ class SequentialSpace:
             return elements
 
 # tests
-
+"""
 space = SequentialSpace()
 space.put(("coffee", 1))
 space.put(("kitchen",))
@@ -178,3 +178,4 @@ print(space.getp(("coffee", int)))
 print(space)
 print(space.queryAll((str, )))
 print(space)
+"""
