@@ -14,7 +14,6 @@ class SequentialSpace:
         return str(self.space)
 
     def put(self, _tuple):
-        print("im puttimh")
         with self.editor_lock, self.query_lock:
             self.space.append(_tuple)
             self.query_lock.notify_all()
@@ -45,7 +44,6 @@ class SequentialSpace:
 
     # blocking get
     def get(self, _pattern):
-        print('stuck')
         with self.editor_lock:
             satisfy = False
             while not satisfy:
@@ -75,39 +73,61 @@ class SequentialSpace:
                             print("Actual Search wait")
 
     def queryp(self, _pattern):
-        self.reader_count += 1
-        if self.reader_count == 1:
-            with self.query_lock:
-                if not any(_type in _pattern for _type in self.types):
-                    if _pattern not in self.space:
-                        return None
-                    else:
-                        for i, element in enumerate(self.space):
-                            if element == _pattern:
-                                return element
+        with self.editor_lock:
+            self.reader_count += 1
+            if self.reader_count == 1:
+                self.query_lock.acquire()
+                i_have_lock = True
+            else:
+                i_have_lock = False
+            if not any(_type in _pattern for _type in self.types):
+                if _pattern not in self.space:
+                    if i_have_lock:
+                        self.query_lock.release()
+                    return None, self.reader_count-1
                 else:
                     for i, element in enumerate(self.space):
-                        satisfy = True
-                        for j, field in enumerate(_pattern):
-                            if type(field) == type:
-                                if j < len(element) and type(element[j]) != _pattern[j]:
-                                    satisfy = False
-                            else:
-                                if j < len(element) and element[j] != _pattern[j]:
-                                    satisfy = False
-                        if satisfy:
-                            return element
-        return None
+                        if element == _pattern:
+                            if i_have_lock:
+                                self.query_lock.release()
+                            return element, self.reader_count-1
+            else:
+                for i, element in enumerate(self.space):
+                    satisfy = True
+                    for j, field in enumerate(_pattern):
+                        if type(field) == type:
+                            if j < len(element) and type(element[j]) != _pattern[j]:
+                                satisfy = False
+                        else:
+                            if j < len(element) and element[j] != _pattern[j]:
+                                satisfy = False
+                    if satisfy:
+                        if i_have_lock:
+                            self.query_lock.release()
+                        return element, self.reader_count-1
+            if i_have_lock:
+                self.query_lock.release()
+            return None, self.reader_count-1
 
     def query(self, _pattern):
-        with self.editor_lock, self.reader_condition:
-            while True:
+        with self.editor_lock:
+            satisfy = False
+            while not satisfy:
+                if self.reader_count == 1:
+                    self.query_lock.acquire()
+                    i_have_lock = True
+                else:
+                    i_have_lock = False
                 if not any(_type in _pattern for _type in self.types):
                     if _pattern not in self.space:
-                        pass
+                        if i_have_lock:
+                            self.query_lock.release()
+                        self.editor_lock.wait()
                     else:
                         for i, element in enumerate(self.space):
                             if element == _pattern:
+                                if i_have_lock:
+                                    self.query_lock.release()
                                 return element
                 else:
                     for i, element in enumerate(self.space):
@@ -116,16 +136,24 @@ class SequentialSpace:
                             if type(field) == type:
                                 if j < len(element) and type(element[j]) != _pattern[j]:
                                     satisfy = False
+                                    if i_have_lock:
+                                        self.query_lock.release()
+                                    self.editor_lock.wait()
                             else:
                                 if j < len(element) and element[j] != _pattern[j]:
                                     satisfy = False
+                                    if i_have_lock:
+                                        self.query_lock.release()
+                                    self.editor_lock.wait()
                         if satisfy:
+                            if i_have_lock:
+                                self.query_lock.release()
                             return element
 
 
     # getAll
     def getAll(self, _pattern):
-        with self.writer_condition and self.reader_condition:
+        with self.editor_lock, self.query_lock:
             if not any(_type in _pattern for _type in self.types):
                 if _pattern not in self.space:
                     return None
@@ -157,28 +185,29 @@ class SequentialSpace:
 
     # queryAll
     def queryAll(self, _pattern):
-        if not any(_type in _pattern for _type in self.types):
-            if _pattern not in self.space:
-                return None
+        with self.editor_lock:
+            if not any(_type in _pattern for _type in self.types):
+                if _pattern not in self.space:
+                    return None
+                else:
+                    elements = []
+                    for i, element in enumerate(self.space):
+                        if element == _pattern:
+                            elements.append(element)
+                    return elements
             else:
                 elements = []
                 for i, element in enumerate(self.space):
-                    if element == _pattern:
+                    satisfy = True
+                    for j, field in enumerate(_pattern):
+                        if type(field) == type:
+                            if j < len(element) and type(element[j]) != _pattern[j]:
+                                satisfy = False
+                        else:
+                            if j < len(element) and element[j] != _pattern[j]:
+                                satisfy = False
+                    if satisfy:
                         elements.append(element)
-                return elements
-        else:
-            elements = []
-            for i, element in enumerate(self.space):
-                satisfy = True
-                for j, field in enumerate(_pattern):
-                    if type(field) == type:
-                        if j < len(element) and type(element[j]) != _pattern[j]:
-                            satisfy = False
-                    else:
-                        if j < len(element) and element[j] != _pattern[j]:
-                            satisfy = False
-                if satisfy:
-                    elements.append(element)
 
             return elements
 
@@ -189,25 +218,31 @@ space = SequentialSpace()
 space.put(("kitchen",))
 space.put(("another", 2, 3))
 space.put(("last", 1.5))
-space.put((122, 12.5, "q2q3"))
+space.put((122.4, 12.5, "q2q3"))
 
 def wrapper(func, arg, queue):
     return queue.put(func(arg))
 
-
+print(space)
 q1, q2, q3 = Queue(), Queue(), Queue()
-tup1 = ("coffee", int)
+tup1 = ("coffee", 1)
 tup2 = ("coffee",1)
+tup3 = (float, float, str)
+print(space)
+d =threading.Thread(target= wrapper, args=(space.query,tup3,q1))
 a =threading.Thread(target= wrapper, args=(space.get,tup1,q1))
 b=threading.Thread(target= wrapper, args=(space.put,tup2,q1))
+print(threading.active_count())
 c=threading.Thread(target= wrapper, args=(space.put,tup2,q1))
 a.start()
 b.start()
 c.start()
+d.start()
 print(threading.active_count())
 a.join()
 b.join()
 c.join()
+d.join()
 print(threading.active_count())
 #print(space.queryAll((str, )))
 print(space)
