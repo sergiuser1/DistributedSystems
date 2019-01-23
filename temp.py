@@ -1,4 +1,4 @@
-from network import receiveJson, sendJson
+from gate import receiveJson, sendJson
 import socket
 import threading
 import time
